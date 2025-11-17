@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Three.js - Загрузка GLB Модели</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: #e0e0e0; /* Как в примере */
+      color: #222;
+    }
+    canvas { display: block; }
+    #instructions {
+      position: fixed;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      padding: 8px 14px;
+      background: rgba(255, 255, 255, 0.7);
+      border: 1px solid #999;
+      border-radius: 8px;
+    }
+    /* Стили для кнопки атаки */
+    #attackButton {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      padding: 12px 20px;
+      font-size: 16px;
+      font-weight: bold;
+      color: #fff;
+      background-color: #d9534f;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      transition: background-color 0.2s;
+    }
+    #attackButton:hover {
+      background-color: #c9302c;
+    }
+  </style>
+
+  <!-- 
+    Import Map: Сообщает браузеру, где находить 'three' и 'three/addons/'.
+  -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.157.0/examples/jsm/"
+      }
+    }
+  </script>
+
+</head>
+<body>
+
+  <div id="instructions">
+    Загрузка модели "RobotExpressive"...
+  </div>
+
+  <!-- Кнопка для атаки -->
+  <button id="attackButton" style="display: none;">Удар (Punch)</button>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    // ШАГ 1: Импортируем GLTFLoader
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+    let camera, scene, renderer;
+    let clock, mixer; // Для анимации
+    let model, actions = {}, activeAction, previousAction; // Управление анимациями
+
+    init();
+
+    function init() {
+      // --- Часы для анимации ---
+      clock = new THREE.Clock();
+
+      // --- Сцена и Рендерер ---
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setClearColor(0xe0e0e0, 1);
+      document.body.appendChild(renderer.domElement);
+
+      scene = new THREE.Scene();
+
+      // --- Камера ---
+      camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.25, 100);
+      camera.position.set(-5, 3, 10);
+      camera.lookAt(0, 2, 0);
+
+      // --- Управление ---
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.target.set(0, 1, 0); // Целимся чуть выше
+      controls.update();
+
+      // --- Освещение (как в примере) ---
+      const hemiLight = new THREE.HemisphereLight(0xffffff, 0x8d8d8d, 3);
+      hemiLight.position.set(0, 20, 0);
+      scene.add(hemiLight);
+
+      const dirLight = new THREE.DirectionalLight(0xffffff, 3);
+      dirLight.position.set(0, 20, 10);
+      scene.add(dirLight);
+
+      // --- Пол (как в примере) ---
+      const grid = new THREE.GridHelper(200, 40, 0x000000, 0x000000);
+      grid.material.opacity = 0.2;
+      grid.material.transparent = true;
+      scene.add(grid);
+
+      // --- ШАГ 2: Загрузка Модели ---
+      
+      // URL модели, которую мы скачали
+      // Используем полный URL, чтобы пример работал сразу.
+      const modelURL = 'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/models/gltf/RobotExpressive/RobotExpressive.glb';
+
+      // Создаем экземпляр загрузчика
+      const loader = new GLTFLoader();
+
+      // Запускаем загрузку
+      loader.load(modelURL, function (gltf) {
+        
+        // ШАГ 3: Модель загружена!
+        model = gltf.scene;
+        const animations = gltf.animations;
+        
+        // Добавляем модель на сцену
+        scene.add(model);
+
+        // --- ШАГ 4: Настройка Анимации ---
+        mixer = new THREE.AnimationMixer(model);
+
+        // Находим и сохраняем все анимации
+        animations.forEach((clip) => {
+          const action = mixer.clipAction(clip);
+          actions[clip.name] = action;
+
+          // Удар (Punch) и другие "эмоции" должны проигрываться один раз
+          if (['Punch', 'Jump', 'Yes', 'No', 'Wave', 'ThumbsUp'].includes(clip.name)) {
+            action.clampWhenFinished = true;
+            action.loop = THREE.LoopOnce;
+          }
+        });
+
+        // Запускаем анимацию "Idle" (Ожидание) по умолчанию
+        activeAction = actions['Idle'];
+        activeAction.play();
+
+        // --- ШАГ 5: Создание и Прикрепление Меча ---
+        
+        // Находим кость правой руки
+        const handBone = model.getObjectByName('Hand_R');
+        
+        if (handBone) {
+          // Создаем геометрию и материал меча
+          const swordGeom = new THREE.BoxGeometry(0.1, 0.1, 1.5); // Тонкий и длинный
+          const swordMat = new THREE.MeshStandardMaterial({ 
+            color: 0x94a3b8, 
+            roughness: 0.2, 
+            metalness: 0.8, 
+            flatShading: true 
+          });
+          const sword = new THREE.Mesh(swordGeom, swordMat);
+
+          // Позиционируем меч в руке
+          sword.position.set(0, 0, 0.75); // Смещаем по Z, чтобы он "выходил" из кулака
+          sword.rotation.x = THREE.MathUtils.degToRad(90); // Поворачиваем лезвием вперед
+
+          // Прикрепляем меч к кости!
+          handBone.add(sword);
+        } else {
+          console.warn("Не удалось найти кость 'Hand_R' для прикрепления меча.");
+        }
+
+        // Обновляем инструкцию и показываем кнопку
+        document.getElementById('instructions').textContent = 'ЛКМ: Вращать | Колесико: Приблизить/Отдалить';
+        document.getElementById('attackButton').style.display = 'block';
+
+      }, 
+      // (Коллбэк прогресса - необязательно)
+      function (xhr) {
+        const percent = (xhr.loaded / xhr.total * 100).toFixed(0);
+        document.getElementById('instructions').textContent = `Загрузка... ${percent}%`;
+      }, 
+      // (Коллбэк ошибки)
+      function (error) {
+        console.error('Ошибка при загрузке модели:', error);
+        document.getElementById('instructions').textContent = 'Ошибка при загрузке модели. См. консоль.';
+      });
+
+      // --- ШАГ 6: Настройка Кнопки Атаки ---
+      document.getElementById('attackButton').addEventListener('click', () => {
+        playAttack('Punch');
+      });
+
+      // --- Цикл рендера ---
+      function animate() {
+        requestAnimationFrame(animate);
+        
+        // Получаем время с прошлого кадра
+        const dt = clock.getDelta();
+
+        // Обновляем миксер анимаций
+        if (mixer) {
+          mixer.update(dt);
+        }
+
+        controls.update();
+        renderer.render(scene, camera);
+      }
+      animate();
+
+      // --- Ресайз ---
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+    }
+
+    // --- Функция для плавного переключения анимаций ---
+    function playAttack(name) {
+      // Не прерывать атаку, если она уже идет
+      if (activeAction.name === name) return;
+
+      previousAction = activeAction;
+      activeAction = actions[name];
+
+      if (previousAction !== activeAction) {
+        previousAction.fadeOut(0.2); // Плавно убираем старую
+      }
+
+      // Запускаем новую, сбрасываем и плавно показываем
+      activeAction
+        .reset()
+        .setEffectiveTimeScale(1)
+        .setEffectiveWeight(1)
+        .fadeIn(0.2)
+        .play();
+
+      // Добавляем слушатель, который вернет "Idle" после завершения "Punch"
+      mixer.addEventListener('finished', restoreIdleState);
+    }
+
+    function restoreIdleState() {
+      // Убираем слушатель, чтобы он не срабатывал повторно
+      mixer.removeEventListener('finished', restoreIdleState);
+
+      // Плавно возвращаемся к "Idle"
+      previousAction = activeAction; // Теперь 'Punch' - это previous
+      activeAction = actions['Idle']; // 'Idle' - это active
+
+      previousAction.fadeOut(0.5);
+      activeAction
+        .reset()
+        .setEffectiveTimeScale(1)
+        .setEffectiveWeight(1)
+        .fadeIn(0.5)
+        .play();
+    }
+
+  </script>
+</body>
+</html>

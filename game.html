@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Наследие Школы Клинка — Arena (Prototype)</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Play:wght@400;700&family=Unbounded:wght@600;800&display=swap');
+    :root {
+      --bg: #05070d;
+      --panel: rgba(12, 16, 24, 0.82);
+      --panel-strong: rgba(18, 24, 36, 0.94);
+      --border: rgba(140, 170, 255, 0.25);
+      --accent: #5ff0ff;
+      --accent-strong: #ffb347;
+      --danger: #ff5f5f;
+      --text: #f8fbff;
+      --muted: #8ea2c0;
+      --shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+      --card-bg: rgba(10, 13, 21, 0.9);
+      --noise: url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160"%3E%3Crect width="160" height="160" fill="%2305070d"/%3E%3Cg fill="%23ffffff" fill-opacity="0.08"%3E%3Ccircle cx="8" cy="8" r="1"/%3E%3Ccircle cx="88" cy="24" r="1"/%3E%3Ccircle cx="128" cy="64" r="1"/%3E%3Ccircle cx="48" cy="104" r="1"/%3E%3Ccircle cx="144" cy="144" r="1"/%3E%3Ccircle cx="16" cy="136" r="1"/%3E%3C/g%3E%3C/svg%3E');
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: 'Play', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: radial-gradient(circle at top, rgba(94,135,255,0.25), transparent 55%), radial-gradient(circle at bottom, rgba(255,111,97,0.2), transparent 45%), var(--noise);
+      opacity: 0.9;
+      pointer-events: none;
+      z-index: -2;
+    }
+    .hidden { display: none !important; }
+    canvas { display: block; }
+
+    /* HUD */
+    #hud { position: fixed; top: 32px; left: 32px; z-index: 15; display: flex; flex-direction: column; gap: 14px; width: min(440px, 36vw); }
+    .hud-panel { background: var(--panel); border: 1px solid var(--border); border-radius: 18px; padding: 16px; box-shadow: var(--shadow); backdrop-filter: blur(12px); }
+    .hud-header { display: flex; justify-content: space-between; align-items: center; font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 10px; }
+    .hud-title { font-size: 16px; color: var(--text); font-weight: 700; text-transform: uppercase; }
+    .hud-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+    .chip-btn { border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.04); color: var(--text); border-radius: 999px; font-size: 11px; padding: 4px 10px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.05em; }
+    .chip-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .meter { position: relative; height: 16px; border-radius: 999px; overflow: hidden; border: 1px solid rgba(255,255,255,0.15); background: rgba(13,18,28,0.9); margin-bottom: 10px; }
+    .meter-label { position: absolute; left: 12px; top: 0; bottom: 0; font-size: 11px; letter-spacing: 0.08em; display: flex; align-items: center; color: rgba(255,255,255,0.75); text-transform: uppercase; }
+    .meter-fill { height: 100%; width: 0%; transition: width 0.15s ease-out; }
+    .meter.hp .meter-fill { background: linear-gradient(90deg, #ff7b7b, #d93838); }
+    .meter.st .meter-fill { background: linear-gradient(90deg, #9ef5c5, #1dd67e); }
+    .meter.fo .meter-fill { background: linear-gradient(90deg, #9fd7ff, #3e7bff); }
+    .meter.guard .meter-fill { background: linear-gradient(120deg, #ffc857, #ff7f11); }
+
+    .specials-block { margin-top: 6px; }
+    .specials-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 6px; }
+    .special-tray { display: flex; gap: 8px; flex-wrap: wrap; }
+    .special-icon { width: 58px; height: 58px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.12); position: relative; background: rgba(255,255,255,0.04); display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 12px; text-align: center; padding: 6px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .special-icon .abbr { font-size: 11px; letter-spacing: 0.12em; }
+    .special-icon.active { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 12px rgba(95,240,255,0.35); }
+    .special-icon .cooldown { position: absolute; inset: 0; background: rgba(5,7,13,0.85); border-radius: inherit; display: flex; align-items: center; justify-content: center; color: #f3cba5; font-weight: 700; font-size: 13px; }
+
+    .buff-tray { display: flex; gap: 8px; flex-wrap: wrap; min-height: 42px; }
+    .buff-icon { width: 40px; height: 40px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.22); position: relative; background: rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: center; font-size: 11px; text-transform: uppercase; color: var(--text); }
+    .buff-icon .abbr { font-weight: 700; letter-spacing: 0.08em; }
+    .buff-icon.fire { background: linear-gradient(135deg, rgba(255,136,91,0.4), rgba(255,55,75,0.35)); }
+    .buff-icon .timer { position: absolute; bottom: 4px; left: 0; right: 0; font-size: 10px; text-align: center; color: #ffe29d; text-shadow: 0 0 6px rgba(0,0,0,0.8); }
+
+    #combatFeed { position: fixed; bottom: 32px; left: 32px; width: min(360px, 32vw); z-index: 14; display: flex; flex-direction: column-reverse; gap: 8px; }
+    .combat-event { background: rgba(14,16,24,0.85); border: 1px solid rgba(255,255,255,0.14); border-radius: 12px; padding: 8px 12px; font-size: 13px; color: #ffe29d; text-transform: uppercase; letter-spacing: 0.08em; box-shadow: var(--shadow); animation: pulseIn 0.25s ease; transition: opacity 0.3s ease, transform 0.3s ease; }
+    .combat-event.fade { opacity: 0; transform: translateY(6px); }
+    .combat-event.guard { color: #ffd8b1; border-color: rgba(255,155,90,0.6); }
+    .combat-event.parry { color: #9ee2ff; border-color: rgba(132,209,255,0.65); }
+    .combat-event.stun { color: #ff7bb5; border-color: rgba(255,123,181,0.45); }
+    @keyframes pulseIn { from { transform: translateY(8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+    #hintFeed { position: fixed; right: 32px; top: 32px; width: min(320px, 28vw); background: var(--panel-strong); border: 1px solid var(--border); border-radius: 18px; padding: 16px; box-shadow: var(--shadow); backdrop-filter: blur(10px); z-index: 15; }
+    #hintFeed h4 { margin: 0 0 10px 0; font-size: 14px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+    #hintList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+    #hintList li { background: rgba(255,255,255,0.03); border-radius: 12px; padding: 10px; font-size: 13px; line-height: 1.4; border: 1px solid rgba(255,255,255,0.08); color: #e4edff; }
+
+    #specialLog { position: fixed; left: 50%; transform: translateX(-50%); top: 30px; z-index: 16; font-weight: 800; font-size: 22px; color: #ffe29d; text-shadow: 0 0 20px rgba(255,226,157,0.65); opacity: 0; transition: opacity 0.25s ease; letter-spacing: 0.12em; text-transform: uppercase; }
+    #arenaLabel { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 10; font-size: 12px; letter-spacing: 0.3em; color: rgba(255,255,255,0.5); text-transform: uppercase; }
+
+    #enemy-hud { position: fixed; bottom: 32px; right: 32px; width: min(340px, 30vw); z-index: 14; }
+    #enemy-hud .hud-panel { padding: 14px; }
+    #enemy-hud .label { font-size: 12px; letter-spacing: 0.08em; color: var(--muted); text-transform: uppercase; margin-bottom: 8px; }
+
+    /* SPA Shell */
+    #uiRoot { position: fixed; inset: 0; display: grid; grid-template-rows: 72px 1fr 56px; grid-template-columns: 310px 1fr; grid-template-areas: 'top top' 'left center' 'nav nav'; pointer-events: auto; z-index: 12; color: #e6ecff; backdrop-filter: blur(6px); background: linear-gradient(135deg, rgba(3,5,9,0.88), rgba(9,12,20,0.92)); border-left: 2px solid rgba(255,255,255,0.03); border-right: 2px solid rgba(255,255,255,0.03); }
+    #topBar { grid-area: top; display: flex; align-items: center; gap: 16px; padding: 0 24px; background: rgba(4,6,12,0.85); border-bottom: 1px solid rgba(255,255,255,0.04); box-shadow: inset 0 -1px 0 rgba(255,255,255,0.04); }
+    #topBar .pill { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); padding: 10px 14px; border-radius: 999px; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; }
+    #leftPanel { grid-area: left; border-right: 1px solid rgba(255,255,255,0.04); padding: 18px; overflow: auto; background: rgba(8,10,16,0.75); }
+    #centerPanel { grid-area: center; position: relative; overflow: auto; padding: 26px; background: rgba(3,5,9,0.6); }
+    #navBar { grid-area: nav; display: flex; align-items: center; gap: 12px; padding: 10px 20px; border-top: 1px solid rgba(255,255,255,0.04); background: rgba(4,5,10,0.85); }
+
+    .navbtn, .btn-sm, .btn { border: 1px solid rgba(255,255,255,0.12); background: linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0)); border-radius: 12px; padding: 10px 16px; color: var(--text); font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; cursor: pointer; transition: border-color 0.2s ease, color 0.2s ease, transform 0.2s ease; }
+    .navbtn:hover, .btn-sm:hover, .btn:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-1px); }
+    .navbtn.active { border-color: var(--accent-strong); color: var(--accent-strong); }
+    .sec { background: var(--card-bg); border: 1px solid rgba(255,255,255,0.08); border-radius: 18px; padding: 18px; margin-bottom: 18px; box-shadow: var(--shadow); }
+    .sec h3 { margin: 0 0 10px 0; font-size: 15px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+    .col { display: flex; flex-direction: column; gap: 18px; }
+    .card { background: rgba(5,7,13,0.85); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 16px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04); }
+    .card h4 { margin: 0 0 8px 0; font-size: 15px; color: #fdf7ff; letter-spacing: 0.04em; }
+    .muted { color: var(--muted); font-size: 13px; }
+    .tag { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text); background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); padding: 4px 9px; border-radius: 999px; }
+    .row { display: flex; gap: 10px; align-items: center; }
+
+    /* Overlays */
+    .overlay { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(3,5,9,0.74); z-index: 60; }
+    .overlay.show { display: flex; }
+    .overlay .card { width: min(520px, 92vw); background: rgba(7,9,15,0.94); border: 1px solid rgba(255,255,255,0.08); border-radius: 20px; padding: 24px; text-align: center; box-shadow: var(--shadow); }
+    .title { font-size: 26px; font-weight: 800; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.18em; }
+    .title.win { color: #7fffd4; }
+    .title.loss { color: #ff8b8b; }
+    .rewards { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 14px 0; }
+
+    #trainOverlay { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(3,7,18,0.65); z-index: 60; }
+    #trainOverlay.show { display: flex; }
+
+    /* Main Menu */
+    #mainMenu { position: fixed; inset: 0; background: linear-gradient(120deg, rgba(2,3,6,0.95), rgba(7,12,25,0.94)), var(--noise); display: flex; align-items: center; justify-content: center; z-index: 100; }
+    .menu-panel { width: min(640px, 90vw); background: rgba(5,6,12,0.9); border: 1px solid rgba(255,255,255,0.08); border-radius: 28px; padding: 48px; text-align: center; box-shadow: var(--shadow); backdrop-filter: blur(14px); }
+    .menu-logo { font-family: 'Unbounded', 'Play', sans-serif; font-size: 32px; text-transform: uppercase; letter-spacing: 0.3em; margin-bottom: 12px; color: var(--text); }
+    .menu-desc { color: var(--muted); font-size: 14px; line-height: 1.6; margin-bottom: 28px; }
+    .menu-buttons { display: flex; flex-direction: column; gap: 12px; }
+    .menu-btn { border: 1px solid rgba(255,255,255,0.12); border-radius: 14px; padding: 14px; font-size: 15px; text-transform: uppercase; letter-spacing: 0.2em; color: var(--text); background: rgba(255,255,255,0.02); cursor: pointer; transition: transform 0.2s ease, border-color 0.2s ease; }
+    .menu-btn.primary { background: linear-gradient(135deg, #5ce1ff, #7b66ff); border-color: transparent; color: #05070d; font-weight: 700; }
+    .menu-btn:hover { transform: translateY(-2px); border-color: var(--accent); }
+    .menu-btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; border-color: rgba(255,255,255,0.12); }
+    .menu-meta { margin-top: 32px; font-size: 12px; color: rgba(255,255,255,0.45); letter-spacing: 0.2em; }
+
+    /* Settings Modal */
+    .modal { position: fixed; inset: 0; background: rgba(3,4,9,0.85); display: none; align-items: center; justify-content: center; z-index: 90; }
+    .modal.show { display: flex; }
+    .modal-card { width: min(520px, 94vw); background: rgba(7,8,14,0.95); border: 1px solid rgba(255,255,255,0.08); border-radius: 24px; padding: 28px; box-shadow: var(--shadow); }
+    .modal-title { font-size: 20px; letter-spacing: 0.16em; text-transform: uppercase; margin-bottom: 18px; }
+    .settings-group { display: flex; flex-direction: column; gap: 16px; margin-bottom: 20px; }
+    .toggle { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em; }
+    .toggle:last-child { border-bottom: none; }
+    .toggle input { display: none; }
+    .switch { width: 48px; height: 24px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.25); position: relative; transition: background 0.2s ease, border-color 0.2s ease; }
+    .switch::after { content: ''; position: absolute; width: 18px; height: 18px; border-radius: 50%; background: #fff; top: 2px; left: 4px; transition: transform 0.2s ease; }
+    .toggle input:checked + .switch { background: var(--accent); border-color: var(--accent); }
+    .toggle input:checked + .switch::after { transform: translateX(20px); }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 12px; }
+
+    #loadingOverlay { position: fixed; inset: 0; background: rgba(2,4,8,0.82); display: none; align-items: center; justify-content: center; z-index: 80; }
+    #loadingOverlay.show { display: flex; }
+    #loadingOverlay .modal-card { text-align: center; }
+    .spinner { width: 48px; height: 48px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.2); border-top-color: var(--accent); margin: 0 auto 14px; animation: spin 0.9s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #screen { min-height: 100%; }
+  </style>
+</head>
+<body>
+  <div id="hud" class="hidden">
+    <div class="hud-panel">
+      <div class="hud-header">
+        <div class="hud-title">Боец</div>
+        <div id="hudContextLabel">—</div>
+      </div>
+      <div class="hud-actions">
+        <button id="resetBtn" class="chip-btn">Сброс</button>
+        <button id="godBtn" class="chip-btn">Фокус MAX</button>
+        <button id="practiceBtn" class="chip-btn">Практика: OFF</button>
+      </div>
+      <div class="meter hp">
+        <div class="meter-label">HP</div>
+        <div class="meter-fill" id="hpFill"></div>
+      </div>
+      <div class="meter st">
+        <div class="meter-label">Stamina</div>
+        <div class="meter-fill" id="stFill"></div>
+      </div>
+      <div class="meter fo">
+        <div class="meter-label">Focus</div>
+        <div class="meter-fill" id="foFill"></div>
+      </div>
+      <div class="meter guard">
+        <div class="meter-label">Guard</div>
+        <div class="meter-fill" id="guardFill"></div>
+      </div>
+      <div class="specials-block">
+        <div class="specials-title">Спецприёмы</div>
+        <div class="special-tray" id="specialTray"></div>
+      </div>
+      <div class="specials-block">
+        <div class="specials-title">Баффы</div>
+        <div class="buff-tray" id="buffTray"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="hintFeed" class="hidden">
+    <h4>Туториал</h4>
+    <ul id="hintList"></ul>
+  </div>
+
+  <div id="combatFeed"></div>
+  <div id="specialLog"></div>
+  <div id="arenaLabel">ARENA CORE ONLINE</div>
+
+  <div id="enemy-hud" class="hidden">
+    <div class="hud-panel">
+      <div class="label">Противник</div>
+      <div class="meter hp">
+        <div class="meter-label" style="left:auto; right:12px; justify-content:flex-end;">HP</div>
+        <div class="meter-fill" id="enemyHpFill"></div>
+      </div>
+      <div class="meter guard">
+        <div class="meter-label" style="left:auto; right:12px; justify-content:flex-end;">Guard</div>
+        <div class="meter-fill" id="enemyGuardFill"></div>
+      </div>
+      <div class="specials-title">Статусы</div>
+      <div class="buff-tray" id="enemyBuffTray"></div>
+    </div>
+  </div>
+
+  <div id="tourOverlay" class="overlay">
+    <div class="card">
+      <div id="tourResTitle" class="title">—</div>
+      <div id="tourResTier" class="muted">—</div>
+      <div id="tourResRewards" class="rewards"></div>
+      <div class="row" style="justify-content:center; margin-top: 10px;">
+        <button id="tourRetry" class="btn-sm">Повторить</button>
+        <button id="tourBack" class="btn-sm">К турнирам</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="trainOverlay" class="overlay">
+    <div class="card">
+      <div id="trainResTitle" class="title">—</div>
+      <div id="trainResStudent" class="muted">—</div>
+      <div id="trainResXp" class="rewards"></div>
+      <div class="row" style="justify-content:center; margin-top: 10px;">
+        <button id="trainAgainBtn" class="btn-sm">Тренироваться снова</button>
+        <button id="trainBackBtn" class="btn-sm">К тренировкам</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="uiRoot" class="hidden">
+    <div id="topBar">
+      <div class="pill" id="schoolName">Школа Клинка</div>
+      <div class="pill">Деньги: <span id="money">0</span> монет</div>
+      <div class="pill">Слава: <span id="fame">0</span></div>
+      <div class="pill">Ученики: <span id="studentsCount">0</span>/<span id="studentsCap">0</span></div>
+      <div style="flex:1"></div>
+      <button class="btn-sm" id="saveBtn">Сохранить</button>
+      <button class="btn-sm" id="loadBtn">Загрузить</button>
+      <button class="btn-sm" id="resetSaveBtn">Сбросить</button>
+      <button class="btn-sm" id="settingsBtnTop">Настройки</button>
+    </div>
+    <div id="leftPanel">
+      <div class="sec">
+        <h3>Ученики</h3>
+        <div id="studentsList" class="col"></div>
+        <div class="row" style="margin-top:12px;">
+          <button class="btn-sm" id="hireBtn">Нанять ученика</button>
+        </div>
+      </div>
+      <div class="sec">
+        <h3>Книга Стиля</h3>
+        <div id="styleList" class="col"></div>
+      </div>
+    </div>
+    <div id="centerPanel">
+      <div id="screen"></div>
+    </div>
+    <div id="navBar">
+      <button class="navbtn" data-nav="hub">Школа</button>
+      <button class="navbtn" data-nav="student">Ученик</button>
+      <button class="navbtn" data-nav="training">Тренировка</button>
+      <button class="navbtn" data-nav="meditation">Медитация</button>
+      <button class="navbtn" data-nav="tournaments">Турниры</button>
+    </div>
+  </div>
+
+  <div id="mainMenu">
+    <div class="menu-panel">
+      <div class="menu-logo">НАСЛЕДИЕ ШКОЛЫ КЛИНКА</div>
+      <div class="menu-desc">Прототип арены, где боевая школа и 3D-спарринги переплетаются. Соберите учеников, обучите их стилю и отправьте на турниры.</div>
+      <div class="menu-buttons">
+        <button class="menu-btn primary" id="menuNewGame">Новая игра</button>
+        <button class="menu-btn" id="menuContinue">Загрузить игру</button>
+        <button class="menu-btn" id="menuSettings">Настройки</button>
+        <button class="menu-btn" id="menuExit">Выход</button>
+      </div>
+      <div class="menu-meta">alpha prototype build</div>
+    </div>
+  </div>
+
+  <div id="settingsOverlay" class="modal">
+    <div class="modal-card">
+      <div class="modal-title">Настройки</div>
+      <div class="settings-group">
+        <label class="toggle">Тряска камеры
+          <input type="checkbox" id="settingCameraShake" checked />
+          <span class="switch"></span>
+        </label>
+        <label class="toggle">Боевые подсказки
+          <input type="checkbox" id="settingCombatHints" checked />
+          <span class="switch"></span>
+        </label>
+        <label class="toggle">Низкие эффекты
+          <input type="checkbox" id="settingLowFX" />
+          <span class="switch"></span>
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-sm" id="settingsClose">Закрыть</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="loadingOverlay">
+    <div class="modal-card">
+      <div class="spinner"></div>
+      <div id="loadingText">Загрузка...</div>
+    </div>
+  </div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.125.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.125.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
